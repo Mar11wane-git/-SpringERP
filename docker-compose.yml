@@ -1,0 +1,87 @@
+# Full stack: MySQL + Spring Boot API + nginx-served frontend.
+#   cp .env.example .env   # then fill in real values
+#   docker compose up -d --build
+#   open http://localhost:8081
+# MySQL is deliberately NOT published on the host; only the frontend port is.
+# For automatic HTTPS on a server, add:  --profile https  (see docs/DEPLOYMENT.md).
+
+name: springerp
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-springerp}
+      MYSQL_USER: ${MYSQL_USER:-springerp}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env}
+      TZ: UTC
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks: [internal]
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-springerp}?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true&characterEncoding=UTF-8
+      DB_USERNAME: ${MYSQL_USER:-springerp}
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+      APP_JWT_SECRET: ${APP_JWT_SECRET:?set APP_JWT_SECRET in .env}
+      APP_ACCESS_TOKEN_TTL: ${APP_ACCESS_TOKEN_TTL:-PT15M}
+      APP_REFRESH_TOKEN_TTL: ${APP_REFRESH_TOKEN_TTL:-P7D}
+      # Plain-http local stacks need false; keep true behind HTTPS.
+      APP_COOKIE_SECURE: ${APP_COOKIE_SECURE:-true}
+      APP_BOOTSTRAP_ADMIN_EMAIL: ${APP_BOOTSTRAP_ADMIN_EMAIL:-}
+      APP_BOOTSTRAP_ADMIN_PASSWORD: ${APP_BOOTSTRAP_ADMIN_PASSWORD:-}
+    volumes:
+      - documents:/app/data/documents
+    networks: [internal]
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${HTTP_PORT:-8081}:8080"
+    networks: [internal]
+
+  # Optional TLS terminator with automatic Let's Encrypt certificates.
+  caddy:
+    image: caddy:2.8-alpine
+    profiles: [https]
+    restart: unless-stopped
+    depends_on: [frontend]
+    environment:
+      DOMAIN: ${DOMAIN:-}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    networks: [internal]
+
+volumes:
+  mysql-data:
+  documents:
+  caddy-data:
+
+networks:
+  internal:

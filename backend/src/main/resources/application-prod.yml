@@ -1,0 +1,18 @@
+# Production hardening. Requires APP_JWT_SECRET, DB_* and HTTPS in front of the app.
+springdoc:
+  api-docs:
+    enabled: ${APP_API_DOCS_ENABLED:false}
+  swagger-ui:
+    enabled: ${APP_API_DOCS_ENABLED:false}
+
+logging:
+  structured:
+    format:
+      console: ecs
+
+app:
+  security:
+    allow-ephemeral-secret: false
+    refresh-cookie-secure: true
+  demo-data:
+    enabled: false
