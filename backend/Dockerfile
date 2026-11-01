@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ---- Build: compile and package with the Maven wrapper (tests run in CI, not here) ----
-FROM eclipse-temurin:17-jdk-alpine AS build
+FROM eclipse-temurin:24-jdk-alpine AS build
 WORKDIR /workspace
 COPY .mvn/ .mvn/
 COPY mvnw pom.xml ./
@@ -10,7 +10,7 @@ COPY src/ src/
 RUN ./mvnw -q -B -DskipTests package && mv target/springerp-backend-*.jar app.jar
 
 # ---- Runtime: JRE only, unprivileged user ----
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:24-jre-alpine
 RUN addgroup -S app && adduser -S app -G app \
     && mkdir -p /app/data/documents && chown -R app:app /app
 WORKDIR /app
